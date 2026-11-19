@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>こおりの城のニンジャ | ブラウザで遊べる3Dアクション</title>
+<meta name="description" content="ブラウザで遊べる無料3Dアクションゲーム。ニンジャになって2段ジャンプ・カベキック・カギ爪ロープを使い、こおりの城の天守をめざそう！">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0d1530;font-family:"Hiragino Maru Gothic ProN","M PLUS Rounded 1c","Yu Gothic UI","Meiryo",sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#stats{position:fixed;top:14px;left:16px;font-size:18px;font-weight:bold;text-shadow:0 2px 6px rgba(0,20,60,.8);display:flex;gap:18px;pointer-events:none}
+#toast{position:fixed;top:18%;left:50%;transform:translateX(-50%);font-size:30px;font-weight:bold;color:#fff;text-shadow:0 0 14px #5cf,0 3px 8px rgba(0,0,0,.6);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+#hint{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);max-width:92vw;text-align:center;font-size:17px;background:rgba(10,30,70,.6);border:1px solid rgba(160,220,255,.5);padding:10px 20px;border-radius:14px;opacity:0;transition:opacity .3s;pointer-events:none;backdrop-filter:blur(4px)}
+#hookTip{position:fixed;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid #8ef;background:rgba(40,140,255,.35);font-weight:bold;font-size:15px;display:none;align-items:center;justify-content:center;pointer-events:none;box-shadow:0 0 12px #6cf;animation:pulse .8s infinite alternate}
+@keyframes pulse{from{transform:scale(.9)}to{transform:scale(1.12)}}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s}
+.panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(20,40,90,.55),rgba(5,10,30,.85));backdrop-filter:blur(3px);z-index:10}
+.card{text-align:center;padding:30px 20px;max-width:720px;width:96vw}
+.title{white-space:nowrap;font-size:clamp(26px,6.4vw,54px);font-weight:900;letter-spacing:.06em;color:#fff;text-shadow:0 0 18px #6cf,0 0 40px #39f,0 4px 0 #1a3a7a}
+.sub{font-size:15px;letter-spacing:.4em;color:#bfe6ff;margin:6px 0 22px}
+.how{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;text-align:left;background:rgba(255,255,255,.07);border:1px solid rgba(170,220,255,.3);border-radius:14px;padding:16px 20px;font-size:15px;margin:0 auto 22px;max-width:460px}
+.how b{color:#9de4ff;white-space:nowrap}
+.btn{font:inherit;font-size:22px;font-weight:bold;color:#0b2350;background:linear-gradient(#e8fbff,#8fdcff);border:none;border-radius:40px;padding:13px 46px;cursor:pointer;box-shadow:0 0 20px rgba(120,210,255,.7),0 5px 0 #3a86c0;transition:transform .1s}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(3px);box-shadow:0 0 20px rgba(120,210,255,.7),0 2px 0 #3a86c0}
+.best{margin-top:14px;color:#cdeeff;font-size:15px;min-height:1em}
+.result{font-size:22px;line-height:1.9;margin:14px 0 22px}
+.result .big{font-size:40px;font-weight:900;color:#ffe680;text-shadow:0 0 14px #fa0}
+.hidden{display:none!important}
+#mute{position:fixed;top:10px;right:12px;font-size:22px;background:rgba(10,30,70,.5);border:1px solid rgba(160,220,255,.4);color:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;z-index:5}
+#touch{position:fixed;inset:0;pointer-events:none;z-index:4}
+#joy{position:fixed;width:120px;height:120px;border-radius:50%;border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);display:none;margin:-60px 0 0 -60px}
+#joyK{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(200,240,255,.5)}
+.tbtn{position:fixed;pointer-events:auto;width:78px;height:78px;border-radius:50%;border:2px solid rgba(200,240,255,.6);background:rgba(40,120,220,.35);color:#fff;font:inherit;font-weight:bold;font-size:15px}
+#tJump{right:22px;bottom:28px;width:92px;height:92px}
+#tHook{right:128px;bottom:20px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="stats"><span id="sTime">⏱ 0:00.0</span><span id="sDeath">💀 0</span><span id="sScroll">📜 0/5</span></div>
+<div id="toast"></div>
+<div id="hint"></div>
+<div id="hookTip">E</div>
+<div id="flash"></div>
+<button id="mute" title="音のオン/オフ (M)">🔊</button>
+
+<div id="touch" class="hidden">
+  <div id="joy"><div id="joyK"></div></div>
+  <button class="tbtn" id="tHook">フック</button>
+  <button class="tbtn" id="tJump">ジャンプ</button>
+</div>
+
+<div id="title" class="panel">
+  <div class="card">
+    <div class="title">こおりの城のニンジャ</div>
+    <div class="sub">ICE CASTLE NINJA</div>
+    <div class="how">
+      <b>移動</b><span>WASD ／ 矢印キー</span>
+      <b>ジャンプ</b><span>Space（空中でもう一度で2段ジャンプ）</span>
+      <b>カベキック</b><span>カベにふれたまま Space</span>
+      <b>カギ爪ロープ</b><span>青いクリスタルの近くで E ／ クリック</span>
+      <b>カメラ</b><span>マウス（画面をクリックで固定）／ J・L キー</span>
+      <b>やり直し</b><span>R（チェックポイントへ）</span>
+    </div>
+    <button class="btn" id="startBtn">スタート</button>
+    <div class="best" id="bestTitle"></div>
+  </div>
+</div>
+
+<div id="clear" class="panel hidden">
+  <div class="card">
+    <div class="title">天守にとうちゃく！</div>
+    <div class="sub">STAGE CLEAR</div>
+    <div class="result" id="result"></div>
+    <button class="btn" id="againBtn">もう一度あそぶ</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// =====================================================================
+//  こおりの城のニンジャ  —  WebGL 3D アクション（外部ライブラリなし）
+// =====================================================================
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl', { antialias: true });
+if (!gl) { document.body.innerHTML = '<p style="padding:30px;font-size:20px">このブラウザはWebGLに対応していないため遊べません。ChromeやEdge、Safariの最新版でお試しください。</p>'; throw new Error('no webgl'); }
+
+// ---------------- 行列 ----------------
+const mI = () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; };
+const mC = a => new Float32Array(a);
+function mMul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+function mT(m, x, y, z) { for (let r = 0; r < 4; r++) m[12 + r] += m[r] * x + m[4 + r] * y + m[8 + r] * z; return m; }
+function mRY(m, a) { const c = Math.cos(a), s = Math.sin(a); for (let r = 0; r < 4; r++) { const a0 = m[r], a2 = m[8 + r]; m[r] = a0 * c - a2 * s; m[8 + r] = a0 * s + a2 * c; } return m; }
+function mRX(m, a) { const c = Math.cos(a), s = Math.sin(a); for (let r = 0; r < 4; r++) { const a1 = m[4 + r], a2 = m[8 + r]; m[4 + r] = a1 * c + a2 * s; m[8 + r] = -a1 * s + a2 * c; } return m; }
+function mRZ(m, a) { const c = Math.cos(a), s = Math.sin(a); for (let r = 0; r < 4; r++) { const a0 = m[r], a1 = m[4 + r]; m[r] = a0 * c + a1 * s; m[4 + r] = -a0 * s + a1 * c; } return m; }
+function mS(m, x, y, z) { for (let r = 0; r < 4; r++) { m[r] *= x; m[4 + r] *= y; m[8 + r] *= z; } return m; }
+function persp(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2), nf = 1 / (n - f); return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) * nf, -1, 0, 0, 2 * f * n * nf, 0]); }
+function lookAt(e, c, u) {
+  let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2]; let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+  let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  return new Float32Array([xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1]);
+}
+function xform(m, x, y, z) { return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14], m[3] * x + m[7] * y + m[11] * z + m[15]]; }
+
+// ---------------- シェーダー ----------------
+function prog(vs, fs) {
+  const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); return sh; };
+  const p = gl.createProgram(); gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name; u[nm] = gl.getUniformLocation(p, nm); }
+  return { p, u, a: (nm) => gl.getAttribLocation(p, nm) };
+}
+const MAIN = prog(`
+attribute vec3 aPos; attribute vec3 aNor;
+uniform mat4 uProj, uView, uModel; uniform vec3 uScale;
+varying vec3 vN; varying vec3 vW;
+void main(){ vec4 w = uModel*vec4(aPos,1.0); vW = w.xyz;
+  mat3 m = mat3(uModel[0].xyz, uModel[1].xyz, uModel[2].xyz);
+  vN = m*(aNor/(uScale*uScale)); gl_Position = uProj*uView*w; }`, `
+precision mediump float;
+uniform vec3 uColor, uSun, uCam, uFog; uniform float uAlpha, uSpec, uEmis, uFogD;
+varying vec3 vN; varying vec3 vW;
+void main(){
+  vec3 n = normalize(vN); vec3 v = normalize(uCam - vW);
+  float d = max(dot(n, uSun), 0.0); float hemi = 0.55 + 0.45*n.y;
+  vec3 col = uColor*(0.66*hemi*vec3(0.8,0.9,1.1) + 0.6*d*vec3(1.0,0.96,0.9));
+  vec3 h = normalize(uSun + v);
+  col += uSpec*pow(max(dot(n,h),0.0), 40.0)*vec3(1.0);
+  col += uSpec*0.45*pow(1.0 - max(dot(n,v),0.0), 3.0)*vec3(0.7,0.92,1.0);
+  col = mix(col, uColor, uEmis);
+  float dist = length(uCam - vW);
+  float f = 1.0 - exp(-pow(dist*uFogD, 1.6));
+  col = mix(col, uFog, clamp(f, 0.0, 1.0));
+  gl_FragColor = vec4(col, uAlpha);
+}`);
+const SKY = prog(`
+attribute vec2 aP; varying vec2 vP; void main(){ vP = aP; gl_Position = vec4(aP, 0.999, 1.0); }`, `
+precision mediump float; varying vec2 vP; uniform float uH, uYaw, uTime; uniform vec3 uTop, uHor;
+void main(){
+  float t = clamp((vP.y - uH)*0.75, 0.0, 1.0);
+  vec3 col = mix(uHor, uTop, pow(t, 0.65));
+  float x = vP.x*0.8 - uYaw*1.3;
+  float band = exp(-pow((vP.y - uH - 0.62 - 0.09*sin(x*2.3 + uTime*0.25) - 0.05*sin(x*5.1 - uTime*0.4))*7.0, 2.0));
+  col += vec3(0.25,0.95,0.7)*band*0.22*(0.6+0.4*sin(x*3.0+uTime*0.3));
+  if (vP.y < uH) col = mix(uHor, uHor*0.9, clamp((uH - vP.y)*2.0, 0.0, 1.0));
+  gl_FragColor = vec4(col, 1.0);
+}`);
+const PTS = prog(`
+attribute vec3 aPos; uniform mat4 uProj, uView; uniform float uSize;
+void main(){ vec4 p = uView*vec4(aPos,1.0); gl_Position = uProj*p; gl_PointSize = clamp(uSize/max(-p.z,0.1), 1.0, 7.0); }`, `
+precision mediump float; uniform vec4 uCol;
+void main(){ vec2 c = gl_PointCoord - 0.5; float d = dot(c,c); if (d > 0.25) discard; gl_FragColor = vec4(uCol.rgb, uCol.a*(1.0 - d*3.0)); }`);
+
+// 立方体（-0.5〜0.5）
+const cubeBuf = (() => {
+  const P = [], N = [], I = [];
+  const faces = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
+  for (const n of faces) {
+    const u = n[1] !== 0 ? [1, 0, 0] : [0, 1, 0];
+    const w = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+    const b = P.length / 3;
+    for (const [s, t] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { P.push((n[0] + u[0] * s + w[0] * t) / 2, (n[1] + u[1] * s + w[1] * t) / 2, (n[2] + u[2] * s + w[2] * t) / 2); N.push(...n); }
+    I.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  }
+  const pb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(P), gl.STATIC_DRAW);
+  const nb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, nb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(N), gl.STATIC_DRAW);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(I), gl.STATIC_DRAW);
+  return { pb, nb, ib, n: I.length };
+})();
+const skyBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+const SNOW_N = 700; const snowPos = new Float32Array(SNOW_N * 3);
+const snowBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, snowBuf); gl.bufferData(gl.ARRAY_BUFFER, snowPos.byteLength, gl.DYNAMIC_DRAW);
+
+// ---------------- 色と素材 ----------------
+const COL = {
+  stone: [.44, .49, .62], snowcap: [.95, .97, 1], ice: [.5, .85, 1], crumble: [.75, .92, 1], move: [.8, .56, .28], wood: [.5, .32, .2],
+  roof: [.2, .34, .46], white: [.93, .92, .88], red: [.86, .17, .2], gold: [1, .78, .25], dark: [.12, .12, .17], mount: [.86, .91, 1], cloud: [.82, .88, .98], spike: [.8, .95, 1]
+};
+const MAT = { ice: { a: .72, s: 1 }, crumble: { a: .82, s: .8 }, gold: { s: .7, e: .15 }, spike: { s: .9 } };
+const FOG = [.7, .8, .95], SKYTOP = [.1, .16, .4];
+const SUN = (() => { const v = [.45, .8, .35]; const l = Math.hypot(...v); return v.map(x => x / l); })();
+
+// ---------------- ステージ ----------------
+const solids = [], decor = [], anchors = [], cps = [], scrolls = [], spikes = [], icicles = [], hints = [], movers = [], crumbles = [];
+function box(x0, y0, z0, x1, y1, z1, type, list = solids, extra) { const o = Object.assign({ min: [x0, y0, z0], max: [x1, y1, z1], type, active: true }, extra); list.push(o); return o; }
+function P(cx, top, cz, w, d, h = 1, type = 'snow', extra) { return box(cx - w / 2, top - h, cz - d / 2, cx + w / 2, top, cz + d / 2, type, solids, extra); }
+function D(x0, y0, z0, x1, y1, z1, type) { return box(x0, y0, z0, x1, y1, z1, type, decor); }
+function CP(x, y, z, face, lx = 1.8, lz = 0) { cps.push({ pos: [x, y, z], face, lan: [x + lx, y, z + lz], on: false }); }
+function A(x, y, z, mode) { anchors.push({ pos: [x, y, z], mode }); }
+function S(x, y, z) { scrolls.push({ pos: [x, y + .7, z], got: false }); }
+function H(x, y, z, r, text) { hints.push({ pos: [x, y, z], r, text }); }
+function C(cx, top, cz) { const o = P(cx, top, cz, 3, 3, .6, 'crumble', { cr: { st: 0, t: 0 } }); crumbles.push(o); }
+function M(cx, top, cz, axis, a, b, period) { const o = P(cx, top, cz, 3, 3, .8, 'move', { mv: { axis, a, b, period, cur: a, d: 0 } }); movers.push(o); }
+function SP(x, top, z0, z1) { spikes.push({ min: [x - .4, top, z0], max: [x + .4, top + .7, z1] }); }
+function IC(x, z, off) { icicles.push({ x, z, off, top: 29.3, floor: 21, y: 29.3, vis: true, warn: 0 }); }
+function tower(x, z, y0, h, w) {
+  D(x - w / 2, y0, z - w / 2, x + w / 2, y0 + h, z + w / 2, 'stone');
+  let y = y0 + h, ww = w * .85;
+  for (let i = 0; i < 3; i++) {
+    D(x - ww / 2, y, z - ww / 2, x + ww / 2, y + 2.6, z + ww / 2, 'white');
+    D(x - ww / 2 - .9, y + 2.6, z - ww / 2 - .9, x + ww / 2 + .9, y + 3.2, z + ww / 2 + .9, 'roof');
+    D(x - ww / 2 - .7, y + 3.2, z - ww / 2 - .7, x + ww / 2 + .7, y + 3.35, z + ww / 2 + .7, 'snowcap');
+    y += 3.35; ww *= .72;
+  }
+  D(x - .3, y, z - .3, x + .3, y + 1.2, z + .3, 'gold');
+}
+
+// スタート地点
+P(0, 0, 0, 16, 16, 4);
+cps.push({ pos: [0, 0, -4], face: 0, lan: null, on: true });
+H(0, 0, -3, 5.5, 'WASD／矢印キーで移動・Spaceでジャンプ　（マウスでカメラを回せるよ）');
+D(-3.3, 0, 4.7, -2.7, 5, 5.3, 'red'); D(2.7, 0, 4.7, 3.3, 5, 5.3, 'red');
+D(-4.2, 4.3, 4.65, 4.2, 4.75, 5.35, 'red'); D(-4.7, 5.1, 4.5, 4.7, 5.6, 5.5, 'dark'); D(-.25, 4.75, 4.8, .25, 5.1, 5.2, 'dark');
+D(-6, -26, -6, 6, -4, 6, 'stone');
+tower(-15, -2, -26, 30, 7); tower(15, -2, -26, 28, 7);
+
+// 1: ジャンプ
+P(0, 1.5, 11, 4, 4, 1.5);
+P(0, 3, 16.5, 3, 3, 1.5);
+P(3, 4.5, 21.5, 3, 3, 1.5);
+P(0, 6, 26.5, 3, 3, 1.5);
+P(0, 6, 33, 6, 6, 2); CP(0, 6, 33, 0);
+H(0, 6, 33, 3.8, '空中でもう一度 Space → 2段ジャンプ！');
+P(0, 7, 43, 4, 4, 1.5);
+P(-6, 9, 40, 2, 2, 10, 'stone'); S(-6, 9, 40);
+
+// 2: 氷の床
+P(0, 7, 52, 3, 12, 1, 'ice');
+P(6, 7, 59.5, 15, 3, 1, 'ice');
+H(0, 7, 48.5, 3, '氷の床はツルツルすべるよ！');
+P(8, 7.5, 52, 2, 2, 1, 'ice'); S(8, 7.5, 52);
+P(17, 7, 59.5, 5, 5, 2); CP(17, 7, 58.5, 0);
+
+// 3: カベキックのたてあな
+P(17, 7, 65, 4, 6, 2);
+box(14, 5, 62, 15, 15, 68, 'stone');
+box(19, 5, 62, 20, 15, 68, 'stone');
+box(14, 5, 68, 20, 15, 69, 'stone');
+H(17, 7, 64.5, 3.2, 'カベに向かってジャンプ → カベにふれたまま Space でカベキック！');
+S(14.5, 15, 65);
+P(17, 15, 75, 6, 12, 1.5); CP(17, 15, 79, -Math.PI / 2, 0, 1.8);
+H(17, 15, 79, 3.5, 'ひびの入った氷は乗るとくずれる！止まらずに走りぬけよう');
+
+// 4: くずれる氷と動く足場
+C(10.5, 15, 79); C(5.5, 15.5, 79); C(.5, 16, 79);
+M(-5, 16.5, 79, 0, -5, -13, 6);
+P(-19, 17, 79, 6, 6, 2); CP(-19, 17, 79, Math.PI);
+H(-19, 17, 79, 3.5, '青いクリスタルの近くで E（またはクリック）→ カギ爪ロープ！');
+
+// 5: カギ爪ロープ
+A(-19, 24, 69, 'fling'); A(-19, 26, 56, 'fling'); A(-28, 27, 63, 'drop');
+P(-28, 24, 63, 4, 4, 1); S(-28, 24, 63);
+P(-19, 21, 47, 7, 11, 2); CP(-19, 21, 45, Math.PI / 2, 0, -2);
+
+// 6: トゲとつららの橋
+P(-6.25, 21, 44, 18.5, 3, 1, 'stone');
+SP(-11, 21, 42.5, 45.5); SP(-3, 21, 42.5, 45.5);
+IC(-7, 44, 0); IC(0, 44, 1.2);
+for (const x of [-7, 0]) { D(x - .4, 29.6, 41.2, x + .4, 30.3, 46.8, 'wood'); D(x - .3, 18, 41.2, x + .3, 30.3, 41.8, 'wood'); D(x - .3, 18, 46.2, x + .3, 30.3, 46.8, 'wood'); }
+H(-13.5, 21, 44, 2.6, 'トゲとつららに注意！ 影が見えたらつららが落ちてくる');
+P(7, 22, 44, 5, 5, 2); CP(7, 22, 44, 0, -1.8, 1.5);
+H(7, 22, 44, 3, '最後はロープで天守へ！');
+P(7, 24.5, 50.5, 3, 3, 1.5);
+P(12, 27, 53.5, 3, 3, 1.5);
+P(14, 24, 39, 2.5, 2.5, 1); S(14, 24, 39);
+A(6, 37, 59, 'drop');
+const goalPlat = P(6, 32, 60, 7, 7, 2);
+const GOAL = [6, 33.3, 60];
+
+// 天守（ゴールの城）
+box(0, -20, 64, 12, 32, 74, 'stone');
+D(1, 32, 64.5, 11, 35.5, 73.5, 'white'); D(-.5, 35.5, 63, 12.5, 36.3, 75, 'roof'); D(-.3, 36.3, 63.2, 12.3, 36.5, 74.8, 'snowcap');
+D(2, 36.5, 65.5, 10, 39.5, 72.5, 'white'); D(.8, 39.5, 64.5, 11.2, 40.3, 73.5, 'roof'); D(1, 40.3, 64.7, 11, 40.5, 73.3, 'snowcap');
+D(3.5, 40.5, 66.5, 8.5, 43, 71.5, 'white'); D(2.5, 43, 65.5, 9.5, 43.8, 72.5, 'roof'); D(2.7, 43.8, 65.7, 9.3, 44, 72.3, 'snowcap');
+D(5.4, 44, 68.4, 6.6, 45.6, 69.6, 'gold');
+for (let i = 0; i < 4; i++) { D(1.3 + i * 2.6, 33, 64.3, 2.5 + i * 2.6, 34.8, 64.5, 'dark'); }
+
+// 遠くの景色
+tower(-50, 20, -26, 34, 9); tower(48, 70, -26, 40, 10); tower(-30, 110, -26, 30, 8); tower(30, -40, -26, 22, 8);
+D(-500, -32, -500, 500, -26, 500, 'cloud');
+{ let sd = 7; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 46; i++) { const a = i / 46 * Math.PI * 2 + rnd() * .1, r = 180 + rnd() * 90, w = 35 + rnd() * 55, h = 30 + rnd() * 100, cx = Math.sin(a) * r, cz = 30 + Math.cos(a) * r;
+    for (let k = 0; k < 4; k++) { const ww = w * (1 - k * .24), y0 = -30 + h * k * .28; D(cx - ww / 2, y0, cz - ww / 2, cx + ww / 2, y0 + h * .3, cz + ww / 2, 'mount'); } } }
+
+// ---------------- 入力 ----------------
+const keys = {};
+let jumpBuf = 0, hookReq = false, dragging = false;
+const touch = { jx: 0, jz: 0, jid: null, ox: 0, oy: 0, cid: null, cx: 0, cy: 0 };
+addEventListener('keydown', e => {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  keys[e.code] = true;
+  if (e.code === 'KeyM') toggleMute();
+  if (state !== 'play') { if (e.code === 'Enter' || e.code === 'Space') { if (state === 'title') startGame(); else if (state === 'clear') startGame(); } return; }
+  if (e.code === 'Space') jumpPress();
+  if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') hookReq = true;
+  if (e.code === 'KeyR') respawn(false);
+});
+addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'Space') jumpRelease(); });
+function jumpPress() { jumpBuf = .15; }
+function jumpRelease() { if (p.cut && p.vy > 4 && !p.grap) { p.vy *= .55; } p.cut = false; }
+cv.addEventListener('mousedown', e => {
+  if (state !== 'play') return; ensureAudio();
+  if (e.button === 2) { hookReq = true; return; }
+  if (document.pointerLockElement !== cv) { dragging = true; try { const r = cv.requestPointerLock && cv.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (_) { } }
+  else hookReq = true;
+});
+addEventListener('mouseup', () => dragging = false);
+addEventListener('mousemove', e => { if (state === 'play' && (document.pointerLockElement === cv || dragging)) rotateCam(e.movementX, e.movementY); });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('wheel', e => { cam.dist = Math.max(4, Math.min(13, cam.dist + e.deltaY * .01)); }, { passive: true });
+function rotateCam(dx, dy) { cam.yaw -= dx * .0025; cam.pitch = Math.max(-.3, Math.min(1.25, cam.pitch + dy * .0025)); }
+// タッチ
+const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
+const joy = document.getElementById('joy'), joyK = document.getElementById('joyK');
+cv.addEventListener('touchstart', e => {
+  e.preventDefault(); ensureAudio();
+  for (const t of e.changedTouches) {
+    if (t.clientX < innerWidth * .45 && touch.jid === null) { touch.jid = t.identifier; touch.ox = t.clientX; touch.oy = t.clientY; joy.style.display = 'block'; joy.style.left = t.clientX + 'px'; joy.style.top = t.clientY + 'px'; joyK.style.transform = ''; }
+    else if (touch.cid === null) { touch.cid = t.identifier; touch.cx = t.clientX; touch.cy = t.clientY; }
+  }
+}, { passive: false });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === touch.jid) { let dx = (t.clientX - touch.ox) / 50, dy = (t.clientY - touch.oy) / 50; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } touch.jx = dx; touch.jz = -dy; joyK.style.transform = `translate(${dx * 35}px,${dy * 35}px)`; }
+    if (t.identifier === touch.cid) { rotateCam((t.clientX - touch.cx) * 1.6, (t.clientY - touch.cy) * 1.6); touch.cx = t.clientX; touch.cy = t.clientY; }
+  }
+}, { passive: false });
+const tEnd = e => { for (const t of e.changedTouches) { if (t.identifier === touch.jid) { touch.jid = null; touch.jx = touch.jz = 0; joy.style.display = 'none'; } if (t.identifier === touch.cid) touch.cid = null; } };
+cv.addEventListener('touchend', tEnd); cv.addEventListener('touchcancel', tEnd);
+const tJ = document.getElementById('tJump'), tH = document.getElementById('tHook');
+tJ.addEventListener('touchstart', e => { e.preventDefault(); ensureAudio(); jumpPress(); }, { passive: false });
+tJ.addEventListener('touchend', e => { e.preventDefault(); jumpRelease(); });
+tH.addEventListener('touchstart', e => { e.preventDefault(); hookReq = true; }, { passive: false });
+
+function getInput() {
+  if (window.__botInput) return window.__botInput;
+  let f = 0, r = 0;
+  if (keys.KeyW || keys.ArrowUp) f += 1; if (keys.KeyS || keys.ArrowDown) f -= 1;
+  if (keys.KeyD || keys.ArrowRight) r += 1; if (keys.KeyA || keys.ArrowLeft) r -= 1;
+  f += touch.jz; r += touch.jx;
+  const l = Math.hypot(f, r); if (l > 1) { f /= l; r /= l; }
+  const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+  return { x: sy * f - cy * r, z: cy * f + sy * r };
+}
+
+// ---------------- サウンド ----------------
+let AC = null, muted = false;
+function ensureAudio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { } } if (AC && AC.state === 'suspended') AC.resume(); }
+function toggleMute() { muted = !muted; document.getElementById('mute').textContent = muted ? '🔇' : '🔊'; }
+document.getElementById('mute').addEventListener('click', e => { e.stopPropagation(); toggleMute(); });
+function tone(f, f2, d, type = 'square', v = .07, delay = 0) {
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0008, t + d);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .03);
+}
+function sfx(n) {
+  if (!AC || muted) return;
+  try {
+    switch (n) {
+      case 'jump': tone(320, 640, .12, 'square', .05); break;
+      case 'jump2': tone(520, 1100, .16, 'triangle', .09); break;
+      case 'kick': tone(220, 760, .13, 'sawtooth', .05); break;
+      case 'hook': tone(1200, 380, .2, 'triangle', .08); tone(90, 60, .15, 'sine', .1); break;
+      case 'land': tone(150, 70, .08, 'sine', .12); break;
+      case 'crack': tone(1800, 300, .12, 'square', .025); break;
+      case 'pick': [660, 830, 990, 1320].forEach((f, i) => tone(f, 0, .12, 'square', .05, i * .06)); break;
+      case 'cp': [523, 659, 784].forEach((f, i) => tone(f, 0, .18, 'triangle', .09, i * .08)); break;
+      case 'die': tone(500, 70, .45, 'sawtooth', .07); break;
+      case 'clear': [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, 0, .25, 'triangle', .1, i * .12)); break;
+    }
+  } catch (_) { }
+}
+
+// ---------------- プレイヤー ----------------
+const GRAV = 32, JUMP = 11.5, SPEED = 7.5, HW = .32, HH = 1.6, HOOK_RANGE = 19;
+const p = { x: 0, y: 0, z: -4, vx: 0, vy: 0, vz: 0, ground: null, coyote: 0, jumps: 1, face: 0, wall: null, wallRun: 0, airLock: 0, grap: null, grapT: 0, flip: 0, cut: false, anim: 0, lastA: null, lastAT: 0, landV: 0 };
+const cam = { yaw: 0, pitch: .32, dist: 7.5, tx: 0, ty: 1.4, tz: -4 };
+let state = 'title', T = 0, playTime = 0, deaths = 0, cpIdx = 0, hookTarget = null, gotScrolls = 0;
+
+function hitBox(x0, y0, z0, x1, y1, z1) {
+  for (const s of solids) { if (!s.active) continue; if (x1 > s.min[0] && x0 < s.max[0] && y1 > s.min[1] && y0 < s.max[1] && z1 > s.min[2] && z0 < s.max[2]) return s; }
+  return null;
+}
+function moveAxis(ax, d) {
+  if (!d) return null;
+  const pos = [p.x, p.y, p.z]; pos[ax] += d; let landed = null;
+  for (const s of solids) {
+    if (!s.active) continue;
+    const x0 = pos[0] - HW, x1 = pos[0] + HW, y0 = pos[1], y1 = pos[1] + HH, z0 = pos[2] - HW, z1 = pos[2] + HW;
+    if (!(x1 > s.min[0] && x0 < s.max[0] && y1 > s.min[1] && y0 < s.max[1] && z1 > s.min[2] && z0 < s.max[2])) continue;
+    if (ax === 1) { if (d < 0) { pos[1] = s.max[1]; landed = s; } else pos[1] = s.min[1] - HH; p.vy = 0; }
+    else { pos[ax] = d > 0 ? s.min[ax] - HW - 1e-4 : s.max[ax] + HW + 1e-4; if (ax === 0) p.vx = 0; else p.vz = 0; }
+  }
+  p.x = pos[0]; p.y = pos[1]; p.z = pos[2];
+  return landed;
+}
+function probeWall() {
+  const y0 = p.y + .35, y1 = p.y + 1.45, e = .12, i = .05;
+  if (hitBox(p.x - HW - e, y0, p.z - HW + i, p.x - HW, y1, p.z + HW - i)) return [1, 0];
+  if (hitBox(p.x + HW, y0, p.z - HW + i, p.x + HW + e, y1, p.z + HW - i)) return [-1, 0];
+  if (hitBox(p.x - HW + i, y0, p.z - HW - e, p.x + HW - i, y1, p.z - HW)) return [0, 1];
+  if (hitBox(p.x - HW + i, y0, p.z + HW, p.x + HW - i, y1, p.z + HW + e)) return [0, -1];
+  return null;
+}
+function findHook() {
+  let best = null, bs = 1e9; const fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
+  for (const a of anchors) {
+    if ((a === p.lastA && p.lastAT > 0) || a === p.grap) continue;
+    const dx = a.pos[0] - p.x, dy = a.pos[1] - (p.y + 1), dz = a.pos[2] - p.z, d = Math.hypot(dx, dy, dz);
+    if (d > HOOK_RANGE || d < 3.5) continue;
+    const h = Math.hypot(dx, dz) || 1, facing = (dx * fx + dz * fz) / h;
+    if (facing < -.25 && d > 6) continue;
+    const sc = d * (1.6 - facing); if (sc < bs) { bs = sc; best = a; }
+  }
+  return best;
+}
+function releaseGrap(dx, dy, dz) {
+  const a = p.grap; p.lastA = a; p.lastAT = .5; p.grap = null; p.jumps = 1;
+  if (a.mode === 'drop') { p.vx = dx * 2; p.vz = dz * 2; p.vy = 5; p.airLock = .1; }
+  else { p.vx = dx * 9.5; p.vz = dz * 9.5; p.vy = Math.max(dy * 9.5, 0) + 5.5; p.airLock = .25; }
+}
+function playerHits(min, max, shrink = .08) {
+  return p.x + HW - shrink > min[0] && p.x - HW + shrink < max[0] && p.y + HH - shrink > min[1] && p.y + shrink < max[1] && p.z + HW - shrink > min[2] && p.z - HW + shrink < max[2];
+}
+function respawn(count = true) {
+  const c = cps[cpIdx];
+  p.x = c.pos[0]; p.y = c.pos[1] + .05; p.z = c.pos[2]; p.vx = p.vy = p.vz = 0; p.grap = null; p.ground = null; p.flip = 0; p.jumps = 1; p.airLock = 0;
+  p.face = c.face; cam.yaw = c.face; cam.tx = p.x; cam.ty = p.y + 1.4; cam.tz = p.z;
+  for (const s of crumbles) { s.cr.st = 0; s.cr.t = 0; s.active = true; }
+  if (count) { deaths++; sfx('die'); const f = document.getElementById('flash'); f.style.transition = 'none'; f.style.background = '#9cf'; f.style.opacity = .7; requestAnimationFrame(() => { f.style.transition = 'opacity .5s'; f.style.opacity = 0; }); }
+}
+let toastTimer = 0;
+function toast(t, dur = 1.6) { const el = document.getElementById('toast'); el.textContent = t; el.style.opacity = 1; toastTimer = dur; }
+
+function step(dt) {
+  T += dt; if (state === 'play') playTime += dt;
+  // 動く足場
+  for (const s of movers) { const m = s.mv; const c = m.a + (m.b - m.a) * (.5 - .5 * Math.cos(T / m.period * Math.PI * 2)); m.d = c - m.cur; m.cur = c; s.min[m.axis] += m.d; s.max[m.axis] += m.d; }
+  // くずれる氷
+  for (const s of crumbles) {
+    const c = s.cr; c.t += dt;
+    if (c.st === 1 && c.t > .55) { c.st = 2; c.t = 0; s.active = false; if (p.ground === s) p.ground = null; }
+    else if (c.st === 2 && c.t > 3 && !playerHits(s.min, s.max, 0)) { c.st = 0; s.active = true; }
+  }
+  // つらら
+  for (const ic of icicles) {
+    const u = (T + ic.off) % 2.4; ic.warn = u > .55 && u < 1.6 ? 1 : 0; ic.shake = u > 1 && u < 1.5;
+    if (u < 1.5) { ic.y = ic.top - 1.4; ic.vis = true; }
+    else { ic.y = ic.top - 1.4 - .5 * 45 * (u - 1.5) ** 2; ic.vis = ic.y > ic.floor - .3; }
+  }
+  if (state !== 'play') return;
+  const inp = getInput();
+  p.coyote -= dt; p.airLock -= dt; jumpBuf -= dt; p.lastAT -= dt; if (p.flip > 0) p.flip -= dt;
+  // 動く足場に乗っていたら一緒に動く
+  if (p.ground && p.ground.mv) { const m = p.ground.mv; if (m.axis === 0) p.x += m.d; else if (m.axis === 2) p.z += m.d; else p.y += m.d; }
+  // フック
+  if (hookReq) { hookReq = false; const a = findHook(); if (a) { p.grap = a; p.grapT = 0; p.ground = null; p.flip = 0; sfx('hook'); } }
+  if (p.grap) {
+    p.grapT += dt;
+    const a = p.grap.pos; let dx = a[0] - p.x, dy = a[1] - (p.y + 1), dz = a[2] - p.z; const dist = Math.hypot(dx, dy, dz) || 1; dx /= dist; dy /= dist; dz /= dist;
+    if (dist < 1.3 || p.grapT > 1.6 || jumpBuf > 0) { if (jumpBuf > 0) jumpBuf = 0; releaseGrap(dx, dy, dz); }
+    else { const k = Math.min(1, 12 * dt); p.vx += (dx * 26 - p.vx) * k; p.vy += (dy * 26 - p.vy) * k; p.vz += (dz * 26 - p.vz) * k; p.face = Math.atan2(dx, dz); }
+  } else {
+    const onG = !!p.ground;
+    if (onG) { p.coyote = .1; p.jumps = 1; p.wallRun = 0; }
+    const ice = onG && (p.ground.type === 'ice' || p.ground.type === 'crumble');
+    const il = Math.hypot(inp.x, inp.z);
+    let acc = onG ? (ice ? 9 : 80) : (p.airLock > 0 ? 2 : (il < .1 ? 3 : 26));
+    const hs = Math.hypot(p.vx, p.vz);
+    const sp = onG ? SPEED : Math.max(SPEED, hs - 3 * dt);
+    let ddx = inp.x * sp - p.vx, ddz = inp.z * sp - p.vz; const dl = Math.hypot(ddx, ddz), mx = acc * dt;
+    if (dl > mx) { ddx *= mx / dl; ddz *= mx / dl; }
+    p.vx += ddx; p.vz += ddz;
+    p.wall = onG ? null : probeWall();
+    let g = GRAV;
+    if (p.wall) {
+      const n = p.wall, push = -(inp.x * n[0] + inp.z * n[1]), along = Math.abs(p.vx * n[1] - p.vz * n[0]);
+      if (along > 4.5 && p.wallRun < .8) { p.wallRun += dt; g *= .25; if (p.vy < -1) p.vy = -1; }
+      else if (p.vy < 0 && push > .2) { p.vy = Math.max(p.vy, -2.5); p.face = Math.atan2(-n[0], -n[1]); }
+    }
+    p.vy -= g * dt; if (p.vy < -40) p.vy = -40;
+    if (jumpBuf > 0) {
+      if (onG || p.coyote > 0) { p.vy = JUMP; p.ground = null; p.coyote = 0; jumpBuf = 0; p.cut = true; sfx('jump'); }
+      else if (p.wall) { const n = p.wall; p.vx = n[0] * 8.5; p.vz = n[1] * 8.5; p.vy = JUMP * 1.03; p.airLock = .2; p.jumps = 1; jumpBuf = 0; p.cut = false; p.face = Math.atan2(n[0], n[1]); sfx('kick'); }
+      else if (p.jumps > 0) { p.vy = JUMP * .92; p.jumps = 0; jumpBuf = 0; p.flip = .42; p.cut = true; sfx('jump2'); }
+    }
+  }
+  // 移動と当たり判定
+  const wasG = !!p.ground, fallV = p.vy;
+  moveAxis(0, p.vx * dt); moveAxis(2, p.vz * dt);
+  p.ground = null; const landed = moveAxis(1, p.vy * dt);
+  if (landed) {
+    p.ground = landed; p.flip = 0;
+    if (!wasG && fallV < -9) sfx('land');
+    if (landed.cr && landed.cr.st === 0) { landed.cr.st = 1; landed.cr.t = 0; sfx('crack'); }
+    if (landed === goalPlat) { winGame(); return; }
+  }
+  // 向き・アニメ
+  const hs2 = Math.hypot(p.vx, p.vz);
+  if (!p.grap && hs2 > .6 && p.airLock <= 0 && !(p.wall && p.vy < 0)) {
+    const tgt = Math.atan2(p.vx, p.vz); let d = tgt - p.face; d = Math.atan2(Math.sin(d), Math.cos(d)); p.face += d * Math.min(1, 14 * dt);
+  }
+  p.anim += hs2 * dt * 1.8;
+  // 危険物
+  for (const s of spikes) if (playerHits(s.min, s.max)) return respawn();
+  for (const ic of icicles) if (ic.vis && playerHits([ic.x - .3, ic.y, ic.z - .3], [ic.x + .3, ic.y + 1.4, ic.z + .3])) return respawn();
+  // 落下
+  if (p.y < cps[cpIdx].pos[1] - 14 || p.y < -24) return respawn();
+  // 巻物
+  for (const s of scrolls) if (!s.got && Math.hypot(s.pos[0] - p.x, s.pos[1] - (p.y + .8), s.pos[2] - p.z) < 1.2) { s.got = true; gotScrolls++; sfx('pick'); toast(`巻物ゲット！ (${gotScrolls}/5)`); }
+  // チェックポイント
+  for (let i = cpIdx + 1; i < cps.length; i++) { const c = cps[i]; if (Math.hypot(c.pos[0] - p.x, c.pos[2] - p.z) < 3 && Math.abs(c.pos[1] - p.y) < 1.5) { cpIdx = i; c.on = true; sfx('cp'); toast('チェックポイント！'); } }
+  // ゴール（金の手裏剣にふれても）
+  if (Math.hypot(GOAL[0] - p.x, GOAL[1] - (p.y + .8), GOAL[2] - p.z) < 1.8) winGame();
+}
+
+// ---------------- ゲーム進行 ----------------
+const $ = id => document.getElementById(id);
+function loadBest() { try { return JSON.parse(localStorage.getItem('iceNinjaBest') || 'null'); } catch (_) { return null; } }
+function saveBest(b) { try { localStorage.setItem('iceNinjaBest', JSON.stringify(b)); } catch (_) { } }
+const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`; };
+function showBest() { const b = loadBest(); $('bestTitle').textContent = b ? `ベストタイム ${fmt(b.time)}　（巻物 ${b.scrolls}/5）` : ''; }
+function startGame() {
+  ensureAudio();
+  state = 'play'; playTime = 0; deaths = 0; cpIdx = 0; gotScrolls = 0;
+  for (const c of cps) c.on = false; cps[0].on = true; for (const s of scrolls) s.got = false;
+  respawn(false); cam.pitch = .32;
+  $('title').classList.add('hidden'); $('clear').classList.add('hidden');
+  if (isTouch) $('touch').classList.remove('hidden');
+  toast('天守をめざせ！', 2);
+}
+function winGame() {
+  if (state !== 'play') return;
+  state = 'clear'; sfx('clear');
+  try { document.exitPointerLock && document.exitPointerLock(); } catch (_) { }
+  const b = loadBest(); let nb = false;
+  if (!b || playTime < b.time) { saveBest({ time: playTime, scrolls: gotScrolls }); nb = true; }
+  $('result').innerHTML = `<div>タイム</div><div class="big">${fmt(playTime)}</div>${nb ? '<div style="color:#ffd76a">★ ベストタイム更新！ ★</div>' : `<div>ベスト ${fmt(b.time)}</div>`}<div>やられた回数 ${deaths}　／　巻物 ${gotScrolls}/5</div>${gotScrolls < 5 ? '<div style="font-size:15px;color:#bfe6ff">かくれた巻物をぜんぶ見つけられるかな？</div>' : '<div style="color:#9f9">巻物コンプリート！真のニンジャだ！</div>'}`;
+  $('clear').classList.remove('hidden'); $('touch').classList.add('hidden');
+}
+$('startBtn').addEventListener('click', startGame);
+$('againBtn').addEventListener('click', startGame);
+showBest();
+
+// ---------------- 描画 ----------------
+let proj, view, eye = [0, 0, 0];
+function useMain() {
+  gl.useProgram(MAIN.p);
+  gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuf.pb); let l = MAIN.a('aPos'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuf.nb); l = MAIN.a('aNor'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, cubeBuf.ib);
+  gl.uniformMatrix4fv(MAIN.u.uProj, false, proj); gl.uniformMatrix4fv(MAIN.u.uView, false, view);
+  gl.uniform3fv(MAIN.u.uSun, SUN); gl.uniform3fv(MAIN.u.uCam, eye); gl.uniform3fv(MAIN.u.uFog, FOG); gl.uniform1f(MAIN.u.uFogD, .0075);
+}
+function cube(m, sx, sy, sz, col, a = 1, s = 0, e = 0) {
+  const mm = mS(mC(m), sx, sy, sz);
+  gl.uniformMatrix4fv(MAIN.u.uModel, false, mm); gl.uniform3f(MAIN.u.uScale, sx, sy, sz);
+  gl.uniform3fv(MAIN.u.uColor, col); gl.uniform1f(MAIN.u.uAlpha, a); gl.uniform1f(MAIN.u.uSpec, s); gl.uniform1f(MAIN.u.uEmis, e);
+  gl.drawElements(gl.TRIANGLES, cubeBuf.n, gl.UNSIGNED_SHORT, 0);
+}
+function boxMM(min, max, col, a, s, e, ox = 0, oy = 0, oz = 0) {
+  const m = mI(); mT(m, (min[0] + max[0]) / 2 + ox, (min[1] + max[1]) / 2 + oy, (min[2] + max[2]) / 2 + oz);
+  cube(m, max[0] - min[0], max[1] - min[1], max[2] - min[2], col, a, s, e);
+}
+function drawObj(o, pass) {
+  const mat = MAT[o.type] || {}; const transparent = (mat.a || 1) < 1;
+  if (transparent !== (pass === 1)) return;
+  let ox = 0, oy = 0, oz = 0;
+  if (o.cr) { if (o.cr.st === 1) { ox = (Math.random() - .5) * .12; oz = (Math.random() - .5) * .12; } else if (o.cr.st === 2) { if (o.cr.t > 1) return; oy = -10 * o.cr.t * o.cr.t; } }
+  if (o.type === 'snow') {
+    boxMM(o.min, o.max, COL.stone, 1, 0, 0);
+    boxMM([o.min[0] - .06, o.max[1] - .2, o.min[2] - .06], [o.max[0] + .06, o.max[1] + .02, o.max[2] + .06], COL.snowcap, 1, .15, .05);
+  } else boxMM(o.min, o.max, COL[o.type], mat.a || 1, mat.s || 0, mat.e || 0, ox, oy, oz);
+}
+function shadowAt(x, z, yTop, r, a) {
+  let best = -1e9;
+  for (const s of solids) { if (!s.active) continue; if (x > s.min[0] && x < s.max[0] && z > s.min[2] && z < s.max[2] && s.max[1] <= yTop + .05 && s.max[1] > best) best = s.max[1]; }
+  if (best < -1e8) return;
+  const m = mI(); mT(m, x, best + .03, z); cube(m, r, .02, r, [0, 0, .05], a, 0, 1);
+}
+function drawNinja() {
+  const base = mI(); mT(base, p.x, p.y, p.z); mRY(base, p.face);
+  const air = !p.ground, sp = Math.hypot(p.vx, p.vz), run = Math.min(sp / 6, 1);
+  if (p.flip > 0) { const a = (1 - p.flip / .42) * Math.PI * 2; mT(base, 0, .8, 0); mRX(base, a); mT(base, 0, -.8, 0); }
+  const navy = [.16, .19, .34], navy2 = [.11, .12, .23], red = [.92, .16, .22], skin = [.98, .82, .68];
+  const sw = air ? 0 : Math.sin(p.anim) * run * .9;
+  const sliding = p.wall && air && p.vy <= 0;
+  for (const s of [-1, 1]) { const m = mC(base); mT(m, s * .13, .72, 0); mRX(m, air ? (s > 0 ? -.7 : .35) : sw * s); mT(m, 0, -.36, 0); cube(m, .2, .72, .24, navy2); }
+  let m = mC(base); mT(m, 0, 1.05, 0); mRX(m, run * .15); cube(m, .5, .62, .32, navy);
+  m = mC(base); mT(m, 0, .8, 0); cube(m, .52, .1, .34, [.3, .22, .15]);
+  m = mC(base); mT(m, 0, 1.58, 0); cube(m, .44, .42, .42, navy);
+  m = mC(base); mT(m, 0, 1.6, .205); cube(m, .32, .11, .03, skin);
+  for (const s of [-1, 1]) { m = mC(base); mT(m, s * .08, 1.6, .224); cube(m, .05, .065, .02, [.05, .05, .1]); }
+  m = mC(base); mT(m, 0, 1.72, 0); cube(m, .46, .08, .46, red);
+  const lift = Math.min(sp / 7, 1) + (air && p.vy < -3 ? .5 : 0);
+  for (const i of [-1, 1]) { m = mC(base); mT(m, i * .07, 1.72, -.23); mRY(m, i * .15); mRX(m, -1.25 + lift * 1.1 + Math.sin(T * 13 + i) * .15); mT(m, 0, 0, -.22); cube(m, .06, .06, .44, red); }
+  m = mC(base); mT(m, 0, 1.36, 0); cube(m, .48, .1, .36, red);
+  m = mC(base); mT(m, .1, 1.36, -.17); mRX(m, -1.3 + lift * 1.15 + Math.sin(T * 11) * .12); mT(m, 0, 0, -.35); cube(m, .16, .05, .7, red);
+  m = mC(base); mT(m, 0, 1.1, -.2); mRZ(m, .75); cube(m, .07, .95, .05, [.15, .15, .2]); mT(m, 0, .55, 0); cube(m, .08, .2, .07, red);
+  for (const s of [-1, 1]) {
+    m = mC(base); mT(m, s * .33, 1.3, 0);
+    let a = -sw * s * 1.1; if (air) a = -2.4 + s * .3; if (sliding) a = -1.5; if (p.grap && s > 0) a = -2.7;
+    mRX(m, a); mRZ(m, s * (air ? .25 : .05)); mT(m, 0, -.26, 0); cube(m, .15, .52, .17, navy);
+    mT(m, 0, -.3, 0); cube(m, .16, .12, .18, skin);
+  }
+  return base;
+}
+function render(dt) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), W = Math.floor(innerWidth * dpr), Hh = Math.floor(innerHeight * dpr);
+  if (cv.width !== W || cv.height !== Hh) { cv.width = W; cv.height = Hh; }
+  gl.viewport(0, 0, W, Hh);
+  if (keys.KeyJ) cam.yaw += 2.2 * dt; if (keys.KeyL) cam.yaw -= 2.2 * dt;
+  if (keys.KeyI) cam.pitch = Math.max(-.3, cam.pitch - 1.5 * dt); if (keys.KeyK) cam.pitch = Math.min(1.25, cam.pitch + 1.5 * dt);
+  // カメラ
+  let tx = p.x, ty = p.y + 1.4, tz = p.z;
+  if (state === 'title') { cam.yaw = T * .12; tx = 2; ty = 14; tz = 40; cam.pitch = .25; cam.dist = 60; }
+  else if (cam.dist > 13) cam.dist = 7.5;
+  const k = Math.min(1, 10 * dt); cam.tx += (tx - cam.tx) * k; cam.ty += (ty - cam.ty) * k; cam.tz += (tz - cam.tz) * k;
+  const cp = Math.cos(cam.pitch), dir = [Math.sin(cam.yaw) * cp, -Math.sin(cam.pitch), Math.cos(cam.yaw) * cp];
+  eye = [cam.tx - dir[0] * cam.dist, cam.ty - dir[1] * cam.dist, cam.tz - dir[2] * cam.dist];
+  proj = persp(1.05, W / Hh, .1, 900); view = lookAt(eye, [cam.tx, cam.ty, cam.tz], [0, 1, 0]);
+  const pv = mMul(proj, view);
+  // 空
+  gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+  gl.useProgram(SKY.p);
+  const hz = xform(pv, eye[0] + Math.sin(cam.yaw) * 800, eye[1], eye[2] + Math.cos(cam.yaw) * 800);
+  gl.uniform1f(SKY.u.uH, hz[1] / hz[3]); gl.uniform1f(SKY.u.uYaw, cam.yaw); gl.uniform1f(SKY.u.uTime, T);
+  gl.uniform3fv(SKY.u.uTop, SKYTOP); gl.uniform3fv(SKY.u.uHor, FOG);
+  gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf); const sl = SKY.a('aP'); gl.enableVertexAttribArray(sl); gl.vertexAttribPointer(sl, 2, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3); gl.disableVertexAttribArray(sl);
+  gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.enable(gl.CULL_FACE);
+  useMain();
+  // 不透明
+  for (const o of decor) drawObj(o, 0);
+  for (const o of solids) drawObj(o, 0);
+  // チェックポイントの灯ろう
+  for (const c of cps) {
+    if (!c.lan) continue; const [x, y, z] = c.lan;
+    let m = mI(); mT(m, x, y + .6, z); cube(m, .5, 1.2, .5, COL.stone);
+    m = mI(); mT(m, x, y + 1.5, z); cube(m, .62, .6, .62, c.on ? [1, .72, .3] : [.55, .72, .95], 1, 0, c.on ? .85 : .35);
+    m = mI(); mT(m, x, y + 1.9, z); cube(m, .9, .2, .9, COL.roof);
+  }
+  // 巻物
+  for (const s of scrolls) {
+    if (s.got) continue; const m = mI(); mT(m, s.pos[0], s.pos[1] + Math.sin(T * 3 + s.pos[0]) * .15, s.pos[2]); mRY(m, T * 2); mRZ(m, Math.PI / 2);
+    cube(m, .32, .7, .32, [.98, .9, .68], 1, .2, .25); cube(m, .38, .1, .38, [.85, .2, .2]); const m2 = mC(m); mT(m2, 0, .38, 0); cube(m2, .2, .08, .2, [.4, .25, .15]); mT(m2, 0, -.76, 0); cube(m2, .2, .08, .2, [.4, .25, .15]);
+  }
+  // ゴールの金の手裏剣
+  { const m = mI(); mT(m, GOAL[0], GOAL[1] + Math.sin(T * 2) * .2, GOAL[2]); mRY(m, T * 2.5); mRX(m, .3);
+    for (let i = 0; i < 4; i++) { const m2 = mC(m); mRZ(m2, i * Math.PI / 2 + Math.PI / 4); mT(m2, 0, .45, 0); cube(m2, .32, .9, .1, COL.gold, 1, .8, .35); }
+    cube(m, .35, .35, .14, [.9, .6, .2], 1, .6, .2); }
+  // フックのクリスタル
+  hookTarget = state === 'play' ? findHook() : null;
+  for (const a of anchors) {
+    const hot = a === hookTarget || a === p.grap; const m = mI(); mT(m, a.pos[0], a.pos[1], a.pos[2]); mRY(m, T * 1.5); mRX(m, .62); mRZ(m, .78);
+    const s = hot ? .95 + Math.sin(T * 10) * .08 : .75; cube(m, s, s, s, hot ? [.6, 1, 1] : [.3, .65, 1], 1, 1, hot ? .7 : .4);
+  }
+  // つらら
+  for (const ic of icicles) {
+    if (!ic.vis) continue; const m = mI(); mT(m, ic.x + (ic.shake ? (Math.random() - .5) * .1 : 0), ic.y + .7, ic.z);
+    cube(m, .45, 1.4, .45, COL.spike, 1, .9, .1); mT(m, 0, -.9, 0); cube(m, .22, .5, .22, COL.spike, 1, .9, .1);
+  }
+  for (const s of spikes) { for (let z = s.min[2] + .35; z < s.max[2]; z += .7) { const m = mI(); mT(m, (s.min[0] + s.max[0]) / 2, s.min[1] + .3, z); mRY(m, .78); cube(m, .38, .6, .38, COL.spike, 1, .9, .1); const m2 = mI(); mT(m2, (s.min[0] + s.max[0]) / 2, s.min[1] + .75, z); mRY(m2, .78); cube(m2, .16, .3, .16, COL.spike, 1, .9, .1); } }
+  // ロープ
+  if (p.grap) {
+    const hx = p.x, hy = p.y + 1.2, hz2 = p.z, a = p.grap.pos, dx = a[0] - hx, dy = a[1] - hy, dz = a[2] - hz2, len = Math.hypot(dx, dy, dz);
+    const m = mI(); mT(m, hx + dx / 2, hy + dy / 2, hz2 + dz / 2); mRY(m, Math.atan2(dx, dz)); mRX(m, -Math.atan2(dy, Math.hypot(dx, dz))); cube(m, .06, .06, len, [.85, .9, 1], 1, 0, .5);
+  }
+  if (state !== 'title') drawNinja();
+  // 半透明（氷・影）
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  if (state !== 'title') shadowAt(p.x, p.z, p.y, .75, .3);
+  for (const ic of icicles) if (ic.warn) shadowAt(ic.x, ic.z, ic.floor + .1, 1.3, .45);
+  for (const o of solids) drawObj(o, 1);
+  // 雪
+  gl.useProgram(PTS.p);
+  for (let i = 0; i < SNOW_N; i++) {
+    let x = snowPos[i * 3], y = snowPos[i * 3 + 1], z = snowPos[i * 3 + 2];
+    y -= (1.2 + (i % 7) * .15) * dt; x += Math.sin(T * .7 + i) * .4 * dt + .3 * dt;
+    const rx = ((x - eye[0]) % 50 + 75) % 50 - 25, ry = ((y - eye[1]) % 30 + 45) % 30 - 15, rz = ((z - eye[2]) % 50 + 75) % 50 - 25;
+    snowPos[i * 3] = eye[0] + rx; snowPos[i * 3 + 1] = eye[1] + ry; snowPos[i * 3 + 2] = eye[2] + rz;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, snowBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, snowPos);
+  const pl = PTS.a('aPos'); gl.enableVertexAttribArray(pl); gl.vertexAttribPointer(pl, 3, gl.FLOAT, false, 0, 0);
+  gl.uniformMatrix4fv(PTS.u.uProj, false, proj); gl.uniformMatrix4fv(PTS.u.uView, false, view); gl.uniform1f(PTS.u.uSize, 40); gl.uniform4f(PTS.u.uCol, 1, 1, 1, .85);
+  gl.drawArrays(gl.POINTS, 0, SNOW_N); gl.disableVertexAttribArray(pl);
+  gl.disable(gl.BLEND); gl.depthMask(true);
+  // HUD
+  const tip = $('hookTip');
+  if (hookTarget && !p.grap) {
+    const c = xform(pv, ...hookTarget.pos);
+    if (c[3] > 0) { tip.style.display = 'flex'; tip.style.left = ((c[0] / c[3] * .5 + .5) * innerWidth) + 'px'; tip.style.top = ((-c[1] / c[3] * .5 + .5) * innerHeight) + 'px'; tip.textContent = isTouch ? '◎' : 'E'; } else tip.style.display = 'none';
+  } else tip.style.display = 'none';
+  if (state === 'play') {
+    $('sTime').textContent = '⏱ ' + fmt(playTime); $('sDeath').textContent = '💀 ' + deaths; $('sScroll').textContent = `📜 ${gotScrolls}/5`;
+    let ht = ''; for (const h of hints) if (Math.hypot(h.pos[0] - p.x, h.pos[2] - p.z) < h.r && Math.abs(h.pos[1] - p.y) < 3) ht = h.text;
+    const he = $('hint'); if (ht) { he.textContent = ht; he.style.opacity = 1; } else he.style.opacity = 0;
+  } else $('hint').style.opacity = 0;
+  if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) $('toast').style.opacity = 0; }
+}
+for (let i = 0; i < SNOW_N * 3; i++) snowPos[i] = (Math.random() - .5) * 50;
+
+// ---------------- ループ ----------------
+let last = performance.now(), acc = 0;
+function frame(now) {
+  let dt = Math.min(.1, (now - last) / 1000); last = now; acc += dt;
+  const FIX = 1 / 120; while (acc >= FIX) { step(FIX); acc -= FIX; }
+  render(dt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// テスト用フック
+window.__game = { p, cam, cps, anchors, solids, step, startGame, respawn, get state() { return state; }, get cpIdx() { return cpIdx; }, set cpIdx(v) { cpIdx = v; }, jump: jumpPress, hook: () => { hookReq = true; }, findHook };
+</script>
+</body>
+</html>
